@@ -1,9 +1,15 @@
 # Major changes to the IOCCC entry toolkit
 
 
-## Release 1.6.13 2024-11-16
+## Release 1.6.13 2024-11-17
 
-Added minor changes to the `jparse/jstrdecode(1)` tool.
+Synced `jparse/` from the [jparse
+repo](https://github.com/xexyl/jparse/). This adds some minor changes to the
+`jstrdecode(1)` tool and adds a new utility function (that is tested in `make
+test` via the `util_test.c` which comes from `util.c`) that opens and parses a
+path as a JSON file (by use of the `open_dir_file()` function), returning NULL
+if invalid JSON. This will be used in the required updates to `chkentry(1)` post
+IOCCC28.
 
 
 ## Release 1.6.12 2024-11-16
