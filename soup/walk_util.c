@@ -824,6 +824,15 @@ free_walk_stat(struct walk_stat *wstat_p)
 	wstat_p->too_long_name = NULL;
     }
     /**/
+    if (wstat_p->dup != NULL) {
+	dyn_array_free(wstat_p->dup);
+	wstat_p->dup = NULL;
+    }
+    if (wstat_p->dup_of != NULL) {
+	dyn_array_free(wstat_p->dup_of);
+	wstat_p->dup_of = NULL;
+    }
+    /**/
     if (wstat_p->fts_err != NULL) {
 	dyn_array_free(wstat_p->fts_err);
 	wstat_p->fts_err = NULL;
@@ -1030,6 +1039,9 @@ init_walk_stat(struct walk_stat *wstat_p, char const *topdir, struct walk_set *s
     wstat_p->abs = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
     wstat_p->too_long_path = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
     wstat_p->too_long_name = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
+    /**/
+    wstat_p->dup = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
+    wstat_p->dup_of = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
     /**/
     wstat_p->fts_err = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
     wstat_p->safe = dyn_array_create(sizeof(struct item *), DEF_CHUNK, DEF_CHUNK, true);
@@ -1307,6 +1319,15 @@ chk_walk_stat(struct walk_stat *wstat_p)
     }
     if (wstat_p->too_long_name == NULL) {
 	warn(__func__, "wstat_p too_long_name is NULL");
+	return false;
+    }
+    /**/
+    if (wstat_p->dup == NULL) {
+	warn(__func__, "wstat_p dup is NULL");
+	return false;
+    }
+    if (wstat_p->dup_of == NULL) {
+	warn(__func__, "wstat_p dup_of is NULL");
 	return false;
     }
     /**/
@@ -2098,9 +2119,9 @@ skip_add(struct walk_stat *wstat_p, char const *fts_path)
  *	  NOTE: using length and depth restrictions that were set when init_walk_stat() was called
  *
  *	- fts_path will be checked if it is a duplicate under wstat_p->all
- *	- If dup_p is non-NULL, *dup_p will be set
+ *	- If is_dup_p is non-NULL, *is_dup_p will be set
  *
- *	  NOTE: *dup_p set according to if canonicalized was already recorded in struct walk_stat or not
+ *	  NOTE: *is_dup_p set according to if canonicalized was already recorded in struct walk_stat or not
  *
  *	- if cpath_ret is non-NULL, *cpath_ret WILL be set to canonicalized path of fts_path
  *
@@ -2123,7 +2144,7 @@ skip_add(struct walk_stat *wstat_p, char const *fts_path)
  *	st_size	    size, in bytes in the form used by stat(2)
  *	st_mode	    inode protection mode in the form used by stat(2)
  *
- *	dup_p       != NULL ==> set *dup_p according to if canonicalized was already recorded in struct walk_stat
+ *	is_dup_p    != NULL ==> set *is_dup_p according to if canonicalized was already recorded in struct walk_stat
  *		    NULL ==> do not check for duplicates
  *	cpath_ret   != NULL ==> update with pointer to the canonical path
  *		    NULL ==> ignore
@@ -2138,11 +2159,12 @@ skip_add(struct walk_stat *wstat_p, char const *fts_path)
  */
 bool
 record_step(struct walk_stat *wstat_p, char const *fts_path, off_t st_size, mode_t st_mode,
-	    bool *dup_p, char const **cpath_ret)
+	    bool *is_dup_p, char const **cpath_ret)
 {
     struct walk_rule *rule_p;	    /* pointer to a walk rule */
     struct walk_set *wset_p;	    /* pointer to a walk set */
     struct item *i_p = NULL;	    /* allocated item */
+    struct item *dup_p = NULL;	    /* item found to be a case independent duplicate of the allocated item */
     char const *cpath = NULL;	    /* canonicalized path arg as a string */
     enum path_sanity sanity = PATH_ERR_UNSET;	    /* canonicalize_path() error code, or PATH_OK */
     size_t path_len = 0;	    /* canonicalized path length */
@@ -2175,7 +2197,7 @@ record_step(struct walk_stat *wstat_p, char const *fts_path, off_t st_size, mode
     }
 
     /*
-     d canonicalize path
+     * canonicalize path
      */
     dbg(DBG_HIGH, "%s: fts_path: %s", __func__, fts_path);
     cpath = canonicalize_path(wstat_p, fts_path, &sanity, &path_len, &deep);
@@ -2183,25 +2205,6 @@ record_step(struct walk_stat *wstat_p, char const *fts_path, off_t st_size, mode
     if (cpath == NULL) {
 	err(57, __func__, "canonicalize_path had an internal failure and returned NULL");
 	not_reached();
-    }
-
-    /*
-     * if requested, check for duplicates
-     */
-    if (dup_p != NULL) {
-
-	/*
-	 * check for duplicates
-	 */
-	i_p = path_in_walk_stat(wstat_p, cpath);
-	if (i_p == NULL) {
-	    dbg(DBG_V2_HIGH, "%s: not a duplicate path: %s", __func__, fts_path);
-	    *dup_p = false;
-	} else{
-	    dbg(DBG_MED, "%s: duplicate path found: %s", __func__, fts_path);
-	    *dup_p = true;
-	    return false;
-	}
     }
 
     /*
@@ -2230,6 +2233,27 @@ record_step(struct walk_stat *wstat_p, char const *fts_path, off_t st_size, mode
      * form an allocated item
      */
     i_p = alloc_item(fts_path, cpath, st_size, st_mode, deep);
+
+    /*
+     * check for canonicalized path duplicates
+     */
+    dup_p = path_in_walk_stat(wstat_p, cpath);
+    if (dup_p != NULL) {
+
+	/*
+	 * cpath canonicalized path was found to be a case independent duplicate of another path
+	 */
+	(void) dyn_array_append_value(wstat_p->dup, &i_p);
+	(void) dyn_array_append_value(wstat_p->dup_of, &dup_p);
+	if (is_dup_p != NULL) {
+	    dbg(DBG_MED, "%s: duplicate path of: %s found: %s", __func__, dup_p->fts_path, fts_path);
+	    *is_dup_p = true;
+	}
+
+    } else if (is_dup_p != NULL) {
+	dbg(DBG_V2_HIGH, "%s: not a duplicate path: %s", __func__, fts_path);
+	*is_dup_p = false;
+    }
 
     /*
      * first, record every item in the all dynamic array
@@ -2780,6 +2804,9 @@ fprintf_walk_stat(FILE *stream, struct walk_stat *wstat_p)
     fprintf_dyn_array_item(stream, "too_long_path", wstat_p->too_long_path);
     fprintf_dyn_array_item(stream, "too_long_name", wstat_p->too_long_name);
     /**/
+    fprintf_dyn_array_item(stream, "dup", wstat_p->dup);
+    fprintf_dyn_array_item(stream, "dup_of", wstat_p->dup_of);
+    /**/
     fprintf_dyn_array_item(stream, "fts_err", wstat_p->fts_err);
     fprintf_dyn_array_item(stream, "safe", wstat_p->safe);
 
@@ -3325,6 +3352,9 @@ sort_walk_stat(struct walk_stat *wstat_p)
     dyn_array_qsort(wstat_p->too_long_path, item_cmp);
     dyn_array_qsort(wstat_p->too_long_path, item_cmp);
     /**/
+    /* NOTE: We do NOT sort dup: dyn_array_qsort(wstat_p->dup, item_cmp); */
+    /* NOTE: We do NOT sort dup_of: dyn_array_qsort(wstat_p->dup_of, item_cmp); */
+    /**/
     dyn_array_qsort(wstat_p->fts_err, item_cmp);
     dyn_array_qsort(wstat_p->safe, item_cmp);
 
@@ -3439,6 +3469,9 @@ sort_walk_istat(struct walk_stat *wstat_p)
     dyn_array_qsort(wstat_p->too_long_path, item_icmp);
     dyn_array_qsort(wstat_p->too_long_path, item_icmp);
     /**/
+    /* NOTE: We do NOT sort dup: dyn_array_qsort(wstat_p->dup, item_icmp); */
+    /* NOTE: We do NOT sort dup_of: dyn_array_qsort(wstat_p->dup_of, item_icmp); */
+    /**/
     dyn_array_qsort(wstat_p->fts_err, item_icmp);
     dyn_array_qsort(wstat_p->safe, item_icmp);
 
@@ -3489,8 +3522,8 @@ chk_walk(struct walk_stat *wstat_p, FILE *stream,
     intmax_t too_long_path_count = 0;	/* number of items whose path is too deep */
     intmax_t too_long_name_count = 0;	/* number of items whose path is too deep */
     intmax_t fts_err_count = 0;		/* number of items causing fts_read(3) errors. */
-    intmax_t fts_all_count = 0;		/* number of items if any kind */
-    intmax_t fts_idup_count = 0;	/* number of items that are case-independent duplicates */
+    intmax_t fts_idup_count = 0;	/* number of items that are case independent duplicates */
+    intmax_t fts_idup_of_count = 0;	/* case independent duplicates are of these items */
     intmax_t counted_file_count = 0;	/* number of counted (non-free) files */
     intmax_t counted_dir_count = 0;	/* number of counted (non-free) directories */
     intmax_t counted_sym_count = 0;	/* number of counted (non-free) symlinks */
@@ -3768,67 +3801,19 @@ chk_walk(struct walk_stat *wstat_p, FILE *stream,
     }
 
     /*
-     * scan all paths to look for any case independent duplicates
-     *
-     * Because we always call sort_walk_istat() before we call this function, any case independent duplicates
-     * will be sorted next to each other.
-     */
-    fts_idup_count = 0;
-    i_p2 = NULL;
-    fts_all_count = dyn_array_tell(wstat_p->all);
-    for (i=0; i < fts_all_count; ++i, i_p2 = i_p) {
-
-	/*
-	 * look at the next item
-	 */
-	i_p = dyn_array_value(wstat_p->all, struct item *, i);
-	if (i_p == NULL) { /* paranoia */
-	    err(83, __func__, "item[%d] all #4 is NULL", i);
-	    not_reached();
-	}
-
-	/*
-	 * nothing to do if this is our 1st item
-	 */
-	if (i_p2 == NULL) {
-	    continue;
-	}
-
-	/*
-	 * look for a case-independent match on canonicalized path
-	 */
-	if (strcasecmp(i_p2->fts_path, i_p->fts_path) == 0) {
-	    ++fts_idup_count;
-	    fmsg(stream, "    %s has the same case-independent canonicalized path as: %s",
-		         i_p2->fts_path, i_p->fts_path);
-	    continue;
-	}
-
-	/*
-	 * look for a case-independent match on the pre-canonicalized path - paranoia
-	 */
-	if (strcasecmp(i_p2->orig_path, i_p->orig_path) == 0) {
-	    ++fts_idup_count;
-	    fmsg(stream, "    %s has the same case-independent path from topdir as: %s",
-		         i_p2->orig_path, i_p->orig_path);
-	    continue;
-	}
-    }
-    if (fts_idup_count > 0) {
-	fmsg(stream, "%s found %jd item%s with duplicate case-independent paths",
-		     wset_p->context, fts_idup_count, SINGULAR_OR_PLURAL(fts_idup_count));
-    }
-
-    /*
      * verify we do not have too many counted (non-free) files
      */
     counted_file_count = dyn_array_tell(wstat_p->counted_file);
     if (max_file > 0 && counted_file_count > max_file) {
-	fmsg(stream, "files: number of counted (non-free): %jd > maximum allowed counted: %d",
-		     counted_file_count, max_file);
+	if (stream != NULL) {
+	    fmsg(stream, "files: number of counted (non-free): %jd > maximum allowed counted: %d",
+			 counted_file_count, max_file);
+	}
 	ret = false;
     } else if (max_file == NO_COUNT && counted_file_count > 0) {
-	fmsg(stream, "files: no counted (non-free) allowed, found: %jd", counted_file_count);
+	if (stream != NULL) {
+	    fmsg(stream, "files: no counted (non-free) allowed, found: %jd", counted_file_count);
+	}
 	ret = false;
     }
 
@@ -3837,11 +3822,15 @@ chk_walk(struct walk_stat *wstat_p, FILE *stream,
      */
     counted_dir_count = dyn_array_tell(wstat_p->counted_dir);
     if (max_dir > 0 && counted_dir_count > max_dir) {
-	fmsg(stream, "directories: number of counted (non-free): %jd > maximum allowed counted: %d",
-		     counted_dir_count, max_dir);
+	if (stream != NULL) {
+	    fmsg(stream, "directories: number of counted (non-free): %jd > maximum allowed counted: %d",
+			 counted_dir_count, max_dir);
+	}
 	ret = false;
     } else if (max_dir == NO_COUNT && counted_dir_count > 0) {
-	fmsg(stream, "directories: no counted (non-free) allowed, found: %jd", counted_dir_count);
+	if (stream != NULL) {
+	    fmsg(stream, "directories: no counted (non-free) allowed, found: %jd", counted_dir_count);
+	}
 	ret = false;
     }
 
@@ -3850,11 +3839,15 @@ chk_walk(struct walk_stat *wstat_p, FILE *stream,
      */
     counted_sym_count = dyn_array_tell(wstat_p->counted_sym);
     if (max_sym > 0 && counted_sym_count > max_sym) {
-	fmsg(stream, "symlinks: number of counted (non-free): %jd > maximum allowed counted: %d",
-		     counted_sym_count, max_sym);
+	if (stream != NULL) {
+	    fmsg(stream, "symlinks: number of counted (non-free): %jd > maximum allowed counted: %d",
+			 counted_sym_count, max_sym);
+	}
 	ret = false;
     } else if (max_sym == NO_COUNT && counted_sym_count > 0) {
-	fmsg(stream, "symlinks: no counted (non-free) allowed, found: %jd", counted_sym_count);
+	if (stream != NULL) {
+	    fmsg(stream, "symlinks: no counted (non-free) allowed, found: %jd", counted_sym_count);
+	}
 	ret = false;
     }
 
@@ -3863,11 +3856,60 @@ chk_walk(struct walk_stat *wstat_p, FILE *stream,
      */
     counted_other_count = dyn_array_tell(wstat_p->counted_other);
     if (max_other > 0 && counted_other_count > max_other) {
-	fmsg(stream, "non-files/dirs/symlinks: number of counted (non-free): %jd > maximum allowed counted: %d",
-		     counted_other_count, max_other);
+	if (stream != NULL) {
+	    fmsg(stream, "non-files/dirs/symlinks: number of counted (non-free): %jd > maximum allowed counted: %d",
+			 counted_other_count, max_other);
+	}
 	ret = false;
     } else if (max_other == NO_COUNT && counted_other_count > 0) {
-	fmsg(stream, "non-files/dirs/symlinks: no counted (non-free) allowed, found: %jd", counted_other_count);
+	if (stream != NULL) {
+	    fmsg(stream, "non-files/dirs/symlinks: no counted (non-free) allowed, found: %jd", counted_other_count);
+	}
+	ret = false;
+    }
+
+    /*
+     * verify we not have case independent duplicate paths
+     */
+    fts_idup_count = dyn_array_tell(wstat_p->dup);
+    fts_idup_of_count = dyn_array_tell(wstat_p->dup_of);
+    if (fts_idup_count != fts_idup_of_count) {
+	if (stream != NULL) {
+	    fmsg(stream, "dup count: %jd != dup_of count: %jd", fts_idup_count, fts_idup_of_count);
+	}
+	ret = false;
+    } else if (fts_idup_count > 0) {
+	if (stream != NULL) {
+	    for (i=0; i < fts_idup_count; ++i) {
+
+		/*
+		 * obtain the item that is a case independent duplicate
+		 */
+		i_p = dyn_array_value(wstat_p->dup, struct item *, i);
+		if (i_p == NULL) { /* paranoia */
+		    err(83, __func__, "item[%d] dup #7 is NULL", i);
+		    not_reached();
+		}
+
+		/*
+		 * obtain what the case independent duplicate is of
+		 */
+		i_p2 = dyn_array_value(wstat_p->dup_of, struct item *, i);
+		if (i_p2 == NULL) { /* paranoia */
+		    err(84, __func__, "item[%d] dup_of #8 is NULL", i);
+		    not_reached();
+		}
+
+		/*
+		 * print about the case independent duplication
+		 */
+		if (strcmp(i_p->fts_path, i_p2->fts_path) == 0) {
+		    fmsg(stream, "   duplicate found: %s", i_p->fts_path);
+		} else {
+		    fmsg(stream, "   %s is a case independent duplicate of: %s", i_p->fts_path, i_p2->fts_path);
+		}
+	    }
+	}
 	ret = false;
     }
 
@@ -3911,19 +3953,19 @@ fts_cmp(const FTSENT **a, const FTSENT **b)
      */
     if (a == NULL) {
 	fprintf(stderr, "%s: a is NULL\n", __func__);
-	exit(84);
+	exit(85);
     }
     if (b == NULL) {
 	fprintf(stderr, "%s: b is NULL\n", __func__);
-	exit(85);
+	exit(86);
     }
     if (*a == NULL) {
 	fprintf(stderr, "%s: *a is NULL\n", __func__);
-	exit(86);
+	exit(87);
     }
     if (*b == NULL) {
 	fprintf(stderr, "%s: *b is NULL\n", __func__);
-	exit(87);
+	exit(88);
     }
 
     /*
@@ -3993,19 +4035,19 @@ fts_icmp(const FTSENT **a, const FTSENT **b)
      */
     if (a == NULL) {
 	fprintf(stderr, "%s: a is NULL\n", __func__);
-	exit(88);
+	exit(89);
     }
     if (b == NULL) {
 	fprintf(stderr, "%s: b is NULL\n", __func__);
-	exit(89);
+	exit(90);
     }
     if (*a == NULL) {
 	fprintf(stderr, "%s: *a is NULL\n", __func__);
-	exit(90);
+	exit(91);
     }
     if (*b == NULL) {
 	fprintf(stderr, "%s: *b is NULL\n", __func__);
-	exit(91);
+	exit(92);
     }
 
     /*
@@ -4073,23 +4115,23 @@ record_fts_err(struct walk_stat *wstat_p, char const *path, off_t st_size, mode_
      * firewall - catch NULL ptrs
      */
     if (wstat_p == NULL) {
-	err(92, __func__, "called with NULL wstat_p");
+	err(93, __func__, "called with NULL wstat_p");
 	not_reached();
     }
     if (wstat_p->fts_err == NULL) {
-        err(93, __func__, "called with NULL wstat_p->fts_err");
+        err(94, __func__, "called with NULL wstat_p->fts_err");
         not_reached();
     }
     if (wstat_p->prune == NULL) {
-        err(94, __func__, "called with NULL wstat_p->prune");
+        err(95, __func__, "called with NULL wstat_p->prune");
         not_reached();
     }
     if (wstat_p->all == NULL) {
-        err(95, __func__, "called with NULL wstat_p->all");
+        err(96, __func__, "called with NULL wstat_p->all");
         not_reached();
     }
     if (path == NULL) {
-	err(96, __func__, "called with path topdir");
+	err(97, __func__, "called with path topdir");
 	not_reached();
     }
 
@@ -4155,7 +4197,7 @@ fts_walk(struct walk_stat *wstat_p)
      * firewall
      */
     if (wstat_p == NULL) {
-	err(97, __func__, "wstat_p is NULL");
+	err(98, __func__, "wstat_p is NULL");
 	not_reached();
     }
 
@@ -4166,7 +4208,7 @@ fts_walk(struct walk_stat *wstat_p)
      *       in this function.
      */
     if (! chk_walk_stat(wstat_p)) {
-	err(98, __func__, "wstat_p failed the chk_walk_stat function test suite");
+	err(99, __func__, "wstat_p failed the chk_walk_stat function test suite");
 	not_reached();
     }
 
@@ -4187,7 +4229,7 @@ fts_walk(struct walk_stat *wstat_p)
     /*
      * "open" the file hierarchy
      *
-     * NOTE: If wstat_p->topdir is a symlink, we will reference where is points, however for
+     * NOTE: If wstat_p->topdir is a symlink, we will reference where it points, however for
      *	     any symlink we find lower down, we will see the symbolic links themselves.
      */
     errno = 0;	/* pre-clear for warnp() */
@@ -4885,9 +4927,9 @@ fts_walk(struct walk_stat *wstat_p)
  * Consider a compressed tarball for a submission that is created on a case dependent filesystem
  * that contains BOTH the file "foo", and the file "Foo".  Assume that submission becomes a
  * winning entry.  Now consider someone who downloads the winning entry tarball onto a filesystem
- * that is case dependent.  When that the "Foo" file will overwrite the previously extracted "foo".
+ * that is case dependent.  The "Foo" file will overwrite the previously extracted "foo".
  *
- * On the other hand, we CANNOT canonicalize with the "lower_case" arg to canon_path() as true.
+ * On the other hand, we CANNOT canonicalize, when the "lower_case" arg to canon_path() is true.
  * Consider case dependent filesystem where a submission is being created.  Assume that submission
  * as a "Makefile".  If the "lower_case" arg to canon_path() were true, then the copyfile() function
  * would attempt to copy the lower case form of "makefile" and fail because the case dependent filesystem
@@ -4955,15 +4997,15 @@ path_in_item_array(struct dyn_array *item_array, char const *c_path)
      * firewall
      */
     if (item_array == NULL) {
-	err(99, __func__, "item_array is NULL");
+	err(100, __func__, "item_array is NULL");
 	not_reached();
     }
     if (c_path == NULL) {
-	err(100, __func__, "c_path is NULL");
+	err(101, __func__, "c_path is NULL");
 	not_reached();
     }
     if (item_array->elm_size != sizeof(struct item *)) {
-	err(101, __func__, "item_array->elm_size: %zu != sizeof(struct item *): %zu",
+	err(102, __func__, "item_array->elm_size: %zu != sizeof(struct item *): %zu",
 			  item_array->elm_size, sizeof(struct item *));
 	not_reached();
     }
@@ -4997,10 +5039,10 @@ path_in_item_array(struct dyn_array *item_array, char const *c_path)
 
 
 /*
- * path_in_walk_stat
+ * path_in_walk_stat - determine if a path is in a all array of a walk_stat
  *
  * Given a struct walk_stat *wstat_p, search the wstat_p->all dynamic array of struct items
- * for a struct item with an fts_path that is identical to c_path.  We can the wstat_p->all
+ * for a struct item with an fts_path that is identical to c_path.  We use the wstat_p->all
  * dynamic array because functions such as record_step() stores all valid items on this
  * dynamic array, regardless of the type of path.
  *
@@ -5064,11 +5106,11 @@ path_in_walk_stat(struct walk_stat *wstat_p, char const *c_path)
      * firewall
      */
     if (wstat_p == NULL) {
-	err(102, __func__, "wstat_p is NULL");
+	err(103, __func__, "wstat_p is NULL");
 	not_reached();
     }
     if (c_path == NULL) {
-	err(103, __func__, "c_path is NULL");
+	err(104, __func__, "c_path is NULL");
 	not_reached();
     }
 
@@ -5079,7 +5121,7 @@ path_in_walk_stat(struct walk_stat *wstat_p, char const *c_path)
      *       in this function.
      */
     if (! chk_walk_stat(wstat_p)) {
-	err(104, __func__, "wstat_p failed the chk_walk_stat function test suite");
+	err(105, __func__, "wstat_p failed the chk_walk_stat function test suite");
 	not_reached();
     }
 

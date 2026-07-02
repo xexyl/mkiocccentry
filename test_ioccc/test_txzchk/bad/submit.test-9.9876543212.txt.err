@@ -26,7 +26,9 @@ txzchk: missing file that matches: Makefile
 txzchk: missing file that matches: remarks.md
 txzchk: missing file that matches: .auth.json
 txzchk: missing file that matches: .info.json
-txzchk found 7 prohibited items
+txzchk found 9 prohibited items
+   prohibited file: .
+   prohibited file: .
    prohibited file: prog
    prohibited file: prog.orig.c
    prohibited file: README.md
@@ -34,5 +36,7 @@ txzchk found 7 prohibited items
    prohibited empty file: .auth.json
    prohibited empty file: remarks.md
    prohibited empty file: .info.json
+   duplicate found: .
+   duplicate found: .
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-9.9876543212.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-9.9876543212.txt: found 25 feathers stuck in the tarball

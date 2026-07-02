@@ -32,5 +32,6 @@ txzchk found 5 unsafe paths
 txzchk found 2 non-relative paths
    file has an absolute path: /test-3/Makefile
    file has an absolute path: /.info.json
+   duplicate found: prog.c
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-3.1922598666.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-3.1922598666.txt: found 16 feathers stuck in the tarball

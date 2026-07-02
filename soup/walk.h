@@ -501,6 +501,10 @@ struct walk_stat {
     struct dyn_array *too_long_path;	/* path is too long */
     struct dyn_array *too_long_name;	/* element in path is too long */
     /**/
+    /* NOTE: We don't sort dup, nor dup_of, so they remain in pairs, in the order added */
+    struct dyn_array *dup;		/* canonicalized path was found to be a case independent duplicate of another path */
+    struct dyn_array *dup_of;		/* the "another path" that is a case independent duplicate of a canonicalized path */
+    /**/
     struct dyn_array *fts_err;		/* caused an fts(3) error e.g., cannot read dir, cannot stat(2), etc. */
     struct dyn_array *safe;		/* all path elements are safe */
 
@@ -533,7 +537,7 @@ extern void init_walk_stat(struct walk_stat *wstat_p, char const *topdir, struct
 			   size_t max_path_len, size_t max_filename_len, int_least32_t max_depth,
 			   bool tar_listing_used);
 extern bool record_step(struct walk_stat *wstat_p, char const *fts_path, off_t st_size, mode_t st_mode,
-		        bool *dup_p, char const **cpath_ret);
+		        bool *is_dup_p, char const **cpath_ret);
 extern void fprintf_walk_stat(FILE *stream, struct walk_stat *wstat_p);
 extern void fprintf_walk_set(FILE *stream, struct walk_set *wset_p);
 int path_cmp(const void *pa, const void *pb);

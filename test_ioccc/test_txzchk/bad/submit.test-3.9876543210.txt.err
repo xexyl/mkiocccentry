@@ -31,10 +31,12 @@ Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-3.9876543210.txt: found 
 Warning: txzchk: file . is a duplicate file
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-3.9876543210.txt: found incorrect top level directory in filename test-0/../f
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-3.9876543210.txt: found incorrect top level directory in filename test-0/..
-txzchk found 1 prohibited item
+txzchk found 2 prohibited items
+   prohibited file: .
    prohibited file: ..
 txzchk found 2 unsafe paths
    file has an unsafe path: ../f
    file has an unsafe path: ..
+   duplicate found: .
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-3.9876543210.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-3.9876543210.txt: found 34 feathers stuck in the tarball

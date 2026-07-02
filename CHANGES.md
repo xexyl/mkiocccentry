@@ -3,10 +3,15 @@
 
 ## Release 2.11.7 2026-06-30
 
-Added to the `chk_walk()` function in `soup/walk_util.c`, an attempt
-to test for case-independent duplicate paths.
+Improved `soup/walk_util.c` and `struct walk_stat` in `soup/walk.h`
+to track case independent duplicate paths, and report duplications.
 
-Updated `SOUP_VERSION` to "2.4.3 2026-06-30"
+Fixed bug in `chk_walk()` in `soup/walk_util.c` were calling with args
+to not print any error information could have crashed the application.
+
+Minor comment cleanup, and typo fixes in `soup/walk_util.c`.
+
+Updated `SOUP_VERSION` to "2.4.3 2026-07-01"
 
 
 ## Release 2.11.6 2026-06-27

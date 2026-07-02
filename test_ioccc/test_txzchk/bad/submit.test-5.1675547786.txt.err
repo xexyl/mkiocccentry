@@ -11,5 +11,6 @@ txzchk: missing empty file that matches: prog.c
 txzchk: missing file that matches: remarks.md
 txzchk: missing file that matches: .auth.json
 txzchk: missing file that matches: .info.json
+   duplicate found: Makefile
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-5.1675547786.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-5.1675547786.txt: found 10 feathers stuck in the tarball

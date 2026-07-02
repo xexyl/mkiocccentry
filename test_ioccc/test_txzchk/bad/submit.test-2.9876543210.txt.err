@@ -31,4 +31,10 @@ Warning: txzchk: file extra1 is a duplicate file
 Warning: txzchk: file extra2 is a duplicate file
 Warning: txzchk: file prog.c is a duplicate file
 Warning: txzchk: file remarks.md is a duplicate file
-Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-2.9876543210.txt: found 33 feathers stuck in the tarball
+   duplicate found: Makefile
+   duplicate found: extra1
+   duplicate found: extra2
+   duplicate found: prog.c
+   duplicate found: remarks.md
+Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-2.9876543210.txt
+Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-2.9876543210.txt: found 34 feathers stuck in the tarball

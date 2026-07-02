@@ -41,4 +41,10 @@ Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-1.9876543210.txt: found 
 Warning: txzchk: file prog.c is a duplicate file
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-1.9876543210.txt: found incorrect top level directory in filename test-0/remarks.md
 Warning: txzchk: file remarks.md is a duplicate file
-Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-1.9876543210.txt: found 43 feathers stuck in the tarball
+   duplicate found: Makefile
+   duplicate found: extra1
+   duplicate found: extra2
+   duplicate found: prog.c
+   duplicate found: remarks.md
+Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-1.9876543210.txt
+Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-1.9876543210.txt: found 44 feathers stuck in the tarball

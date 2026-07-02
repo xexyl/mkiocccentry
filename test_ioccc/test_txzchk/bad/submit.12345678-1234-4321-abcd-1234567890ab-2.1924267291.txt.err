@@ -84,4 +84,13 @@ Warning: txzchk: test_ioccc/test_txzchk/bad/submit.12345678-1234-4321-abcd-12345
 Warning: txzchk: file .info.json is a duplicate file
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.12345678-1234-4321-abcd-1234567890ab-2.1924267291.txt: found incorrect top level directory in filename test-1/extra1
 Warning: txzchk: file extra1 is a duplicate file
-Warning: txzchk: test_ioccc/test_txzchk/bad/submit.12345678-1234-4321-abcd-1234567890ab-2.1924267291.txt: found 86 feathers stuck in the tarball
+   duplicate found: .
+   duplicate found: Makefile
+   duplicate found: extra2
+   duplicate found: prog.c
+   duplicate found: .auth.json
+   duplicate found: remarks.md
+   duplicate found: .info.json
+   duplicate found: extra1
+Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.12345678-1234-4321-abcd-1234567890ab-2.1924267291.txt
+Warning: txzchk: test_ioccc/test_txzchk/bad/submit.12345678-1234-4321-abcd-1234567890ab-2.1924267291.txt: found 87 feathers stuck in the tarball

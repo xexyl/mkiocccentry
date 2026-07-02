@@ -28,5 +28,6 @@ txzchk found 8 prohibited items
    prohibited empty file: remarks.md
    prohibited empty file: .info.json
 non-files/dirs/symlinks: no counted (non-free) allowed, found: 1
+   duplicate found: extra2
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-9.9876543214.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-9.9876543214.txt: found 18 feathers stuck in the tarball

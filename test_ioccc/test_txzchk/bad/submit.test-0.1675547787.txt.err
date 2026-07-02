@@ -17,4 +17,7 @@ Warning: txzchk: file extra1 is a duplicate file
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-0.1675547787.txt: found incorrect top level directory in filename curds/whey/extra
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-0.1675547787.txt: found incorrect top level directory in filename curds/file
 Warning: txzchk: file file is a duplicate file
-Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-0.1675547787.txt: found 19 feathers stuck in the tarball
+   duplicate found: extra1
+   duplicate found: file
+Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-0.1675547787.txt
+Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-0.1675547787.txt: found 20 feathers stuck in the tarball

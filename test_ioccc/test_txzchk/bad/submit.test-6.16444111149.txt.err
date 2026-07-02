@@ -28,5 +28,7 @@ txzchk found 3 non-relative paths
    file has an absolute path: /.info.json
    file has an absolute path: /.test.json
    file has an absolute path: /.file.json
+   duplicate found: .
+   duplicate found: prog.c
 Warning: txzchk: encountered an error walking directory in tarball: test_ioccc/test_txzchk/bad/submit.test-6.16444111149.txt
 Warning: txzchk: test_ioccc/test_txzchk/bad/submit.test-6.16444111149.txt: found 19 feathers stuck in the tarball
