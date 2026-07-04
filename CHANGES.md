@@ -1,6 +1,12 @@
 # Major changes to the IOCCC entry toolkit
 
 
+## Release 2.11.8 2026-07-04
+
+Added bad test file for `txzchk`. With the recent commits it now correctly
+fails.
+
+
 ## Release 2.11.7 2026-06-30
 
 Improved `soup/walk_util.c` and `struct walk_stat` in `soup/walk.h`
