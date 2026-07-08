@@ -1,6 +1,11 @@
 # Major changes to the IOCCC entry toolkit
 
 
+## Release 2.11.9 2026-07-04
+
+Updated `MKIOCCCENTRY_REPO_VERSION` to "2.11.9 2026-07-04"
+
+
 ## Release 2.11.8 2026-07-04
 
 Added bad test file for `txzchk`. With the recent commits it now correctly
