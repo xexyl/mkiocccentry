@@ -93,11 +93,11 @@ COTHER=
 
 # Optimization
 #
-OPT= -O3
+COPT= -O3
 
 # Default flags for ANSI C compilation
 #
-CFLAGS= ${CSTD} ${CWARN} ${ARCH} ${CDEFINE} ${CINCLUDE} ${COTHER} ${OPT}
+CFLAGS= ${CSTD} ${CWARN} ${ARCH} ${CDEFINE} ${CINCLUDE} ${COTHER} ${COPT}
 
 # Libraries needed to build
 #
