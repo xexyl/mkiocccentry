@@ -1,9 +1,9 @@
 MKIOCCCENTRY_ANSWERS_IOCCC-1.0
-12345678-1234-4321-abcd-1234567890ab
+%%UUID%%
+5
+title.5
+abstract for slot 5
 4
-title.4
-abstract for slot 4
-2
 first0 middle0 last0
 AU
 user0@example.au
@@ -12,8 +12,28 @@ https://alt0.example.au/index.html
 @user0@example.au
 @user0
 affiliation for user 0
-y
+n
 first0_middle0_last0
+anonymous person
+XX
+
+
+
+
+
+
+y
+anonymous_person
+first2 last2
+US
+user2@example.us
+http://host2.example.us/index.html
+
+@user2@example.us
+@user2
+affiliation for user 2
+n
+first2_last2
 anon3
 SB
 user3@example.sb

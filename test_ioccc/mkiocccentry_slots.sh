@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# mkiocccentry_slots.sh - rebuild the slot test_ioccc/slot/good/workdir directories using mkiocccentry
+# mkiocccentry_slots.sh - rebuild test_ioccc/slot/good & bad using mkiocccentry
 #
-# Copyright (c) 2025 by Landon Curt Noll.  All Rights Reserved.
+# Copyright (c) 2025-2026 by Landon Curt Noll.  All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and
 # its documentation for any purpose and without fee is hereby granted,
@@ -49,58 +49,100 @@ export LC_ALL="C"
 
 # setup
 #
-export MKIOCCCENTRY_SLOTS_VERSION="1.1.0 2025-11-13"
+NAME=$(basename "$0")
+export NAME
+#
+export V_FLAG=0
+#
+export DO_NOT_PROCESS=
+#
+export VERSION="2.0.0 2026-10-06"
+export GOOD_TREE="./test_ioccc/slot/good"
+export GOOD_TEMPLATE="./test_ioccc/slot/template/good"
+export BAD_TREE="./test_ioccc/slot/bad"
+export BAD_TEMPLATE="./test_ioccc/slot/template/bad"
+#
 export MKIOCCCENTRY="./mkiocccentry"
-export GOOD_TREE="test_ioccc/slot/good"
-export BAD_TREE="test_ioccc/slot/bad"
+export REPO_TOPDIR=
+export UUID="12345678-1234-4321-abcd-1234567890ab"
+#
+RSYNC_BIN=$(type -P rsync)
+export RSYNC_BIN
 #
 export EXIT_CODE=0
-export REPO_TOPDIR=
 
 # usage message
 #
-export USAGE="usage: $0 [-h] [-V] [-v level] [-M mkiocccentry] [-g good_tree] [-b bad_tree] [-Z repo_topdir] [-k] [-B]
+export USAGE="usage: $0 [-h] [-V] [-v level] [-N]
+    [-g good_tree] [-G good_template]
+    [-b bad_tree] [-B bad_template]
+    [-M mkiocccentry] [-R rsync] [-U UUID] [-Z repo_topdir]
 
-    -h			print help and exit
-    -V			print version and exit
-    -v level		set verbosity level for this script: (def level: 0)
+    -h                  print help and exit
+    -v level            set verbosity level for this script: (def level: 0)
+    -V                  print version and exit
 
-    -M mkiocccentry	path to mkiocccentry executable (def: $MKIOCCCENTRY)
-    -g good_tree	path to the good slot tree (def: $GOOD_TREE)
-    -b bad_tree		path to the good slot tree (def: $BAD_TREE)
-    -Z repo_topdir	top level repo directory for the mkiocccentry toolkit (def: try . or ..)
+    -N                  do not process anything, just parse arguments (def: process something)
+
+    -g good_tree        where to form the good slot tree (def: $GOOD_TREE)
+                            NOTE: the good_tree is removed and then rebuilt
+    -G good_template    path of the templates for the good tree (def: $GOOD_TEMPLATE)
+
+    -b bad_tree         where to form the good slot tree (def: $BAD_TREE)
+                            NOTE: the bad_tree is removed and then rebuilt
+    -B bad_template     path of the templates for the bad tree (def: $BAD_TEMPLATE)
+
+    -M mkiocccentry     path to mkiocccentry executable (def: $MKIOCCCENTRY)
+    -R rsync            path to rsync tool (def: $RSYNC_BIN)
+    -U UUID             use username UUID (def: $UUID)
+    -Z repo_topdir      where to cd for the top of the mkiocccentry toolkit (def: try . or ..)
+                            NOTE: repo_topdir/mkiocccentry.c must be a file
+                            NOTE: implies -M repo_topdir/mkiocccentry
+                            NOTE: implies . for default good_tree, good_template, bad_tree, bad_template
 
 Exit codes:
      0   all OK
      1   at least one test failed
      2   -h and help string printed or -V and version string printed
      3   invalid command line
-     4	 missing slot information
+     4   missing slot information
+     5   UUID is invalid, does not match UUID regex
+     6   repo_topdir not valid
  >= 10   internal error or missing file or directory
 
-mkiocccentry_slots.sh version: $MKIOCCCENTRY_SLOTS_VERSION"
+$NAME version: $VERSION"
 
 
 # parse args
 #
-export V_FLAG="0"
-while getopts :hVv:M:g:b:Z: flag; do
+while getopts :hv:VNg:G:b:B:M:R:U:Z: flag; do
     case "$flag" in
     h)	echo "$USAGE" 1>&2
 	exit 2
 	;;
-    V)	echo "$MKIOCCCENTRY_SLOTS_VERSION"
-	exit 2
-	;;
     v)	V_FLAG="$OPTARG";
 	;;
-    M)	MKIOCCCENTRY="$OPTARG";
+    V)	echo "$VERSION"
+	exit 2
+	;;
+    N)  DO_NOT_PROCESS="-N"
 	;;
     g)	GOOD_TREE="$OPTARG";
 	;;
+    G)	GOOD_TEMPLATE="$OPTARG";
+	;;
     b)	BAD_TREE="$OPTARG";
 	;;
+    B)	BAD_TEMPLATE="$OPTARG";
+	;;
+    M)	MKIOCCCENTRY="$OPTARG";
+	;;
+    R)  RSYNC_BIN="$OPTARG";
+        ;;
+    U)  UUID="$OPTARG";
+        ;;
     Z)  REPO_TOPDIR="$OPTARG";
+	MKIOCCCENTRY="$REPO_TOPDIR/mkiocccentry"
         ;;
     \?) echo "$0: ERROR: invalid option: -$OPTARG" 1>&2
 	echo 1>&2
@@ -132,7 +174,7 @@ fi
 if [[ -n $REPO_TOPDIR ]]; then
     if [[ ! -d $REPO_TOPDIR ]]; then
 	echo "$0: ERROR: -Z $REPO_TOPDIR given: not a directory: $REPO_TOPDIR" 1>&2
-	exit 3
+	exit 6
     fi
     if [[ $V_FLAG -ge 1 ]]; then
 	echo "$0: debug[1]: -Z $REPO_TOPDIR given, about to cd $REPO_TOPDIR" 1>&2
@@ -144,7 +186,7 @@ if [[ -n $REPO_TOPDIR ]]; then
     status="$?"
     if [[ $status -ne 0 ]]; then
 	echo "$0: ERROR: -Z $REPO_TOPDIR given: cd $REPO_TOPDIR exit code: $status" 1>&2
-	exit 3
+	exit 6
     fi
 elif [[ -f mkiocccentry.c ]]; then
     REPO_TOPDIR="$PWD"
@@ -156,7 +198,7 @@ elif [[ -f ../mkiocccentry.c ]]; then
     status="$?"
     if [[ $status -ne 0 ]]; then
 	echo "$0: ERROR: cd .. exit code: $status" 1>&2
-	exit 3
+	exit 6
     fi
     REPO_TOPDIR="$PWD"
     if [[ $V_FLAG -ge 3 ]]; then
@@ -164,7 +206,7 @@ elif [[ -f ../mkiocccentry.c ]]; then
     fi
 else
     echo "$0: ERROR: cannot determine REPO_TOPDIR, use -Z topdir" 1>&2
-    exit 3
+    exit 6
 fi
 if [[ $V_FLAG -ge 3 ]]; then
     echo "$0: debug[3]: REPO_TOPDIR is the current directory: $REPO_TOPDIR" 1>&2
@@ -178,108 +220,133 @@ if [[ ! -e $MKIOCCCENTRY ]]; then
 fi
 if [[ ! -f $MKIOCCCENTRY ]]; then
     echo "$0: ERROR: mkiocccentry not a regular file: $MKIOCCCENTRY" 1>&2
-    exit 11
+    exit 10
 fi
 if [[ ! -x $MKIOCCCENTRY ]]; then
     echo "$0: ERROR: mkiocccentry not executable: $MKIOCCCENTRY" 1>&2
+    exit 10
+fi
+
+# check for rsync
+#
+if [[ ! -e $RSYNC_BIN ]]; then
+    echo "$0: ERROR: rsync not found: $RSYNC_BIN" 1>&2
+    exit 11
+fi
+if [[ ! -f $RSYNC_BIN ]]; then
+    echo "$0: ERROR: rsync not a regular file: $RSYNC_BIN" 1>&2
+    exit 11
+fi
+if [[ ! -x $RSYNC_BIN ]]; then
+    echo "$0: ERROR: rsync not executable: $RSYNC_BIN" 1>&2
+    exit 11
+fi
+
+# check that the good template tree is a readable directory
+#
+if [[ ! -e $GOOD_TEMPLATE ]]; then
+    echo "$0: ERROR: good template tree not found: $GOOD_TEMPLATE" 1>&2
+    exit 12
+fi
+if [[ ! -d $GOOD_TEMPLATE ]]; then
+    echo "$0: ERROR: good template tree not a directory: $GOOD_TEMPLATE" 1>&2
+    exit 12
+fi
+if [[ ! -r $GOOD_TEMPLATE ]]; then
+    echo "$0: ERROR: good template tree not readble directory: $GOOD_TEMPLATE" 1>&2
     exit 12
 fi
 
-# check that the good slot tree is a writable directory
+# verify good template tree topdir sub-directory is readable
 #
-if [[ ! -e $GOOD_TREE ]]; then
-    echo "$0: ERROR: good slot tree not found: $GOOD_TREE" 1>&2
+export GOOD_TEMPLATE_TOPDIR="$GOOD_TEMPLATE/topdir"
+if [[ ! -e $GOOD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: good template tree topdir sub-directory directory not found: $GOOD_TEMPLATE_TOPDIR" 1>&2
     exit 13
 fi
-if [[ ! -d $GOOD_TREE ]]; then
-    echo "$0: ERROR: good slot tree not a directory: $GOOD_TREE" 1>&2
+if [[ ! -d $GOOD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: good template tree topdir sub-directory not a directory: $GOOD_TEMPLATE_TOPDIR" 1>&2
+    exit 13
+fi
+if [[ ! -r $GOOD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: good template tree topdir sub-directory not readable directory: $GOOD_TEMPLATE_TOPDIR" 1>&2
+    exit 13
+fi
+
+# verify good template tree answers sub-directory is readable
+#
+export GOOD_TEMPLATE_ANSWERS="$GOOD_TEMPLATE/answers"
+if [[ ! -e $GOOD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: good template tree answers sub-directory directory not found: $GOOD_TEMPLATE_ANSWERS" 1>&2
     exit 14
 fi
-if [[ ! -w $GOOD_TREE ]]; then
-    echo "$0: ERROR: good slot tree not writable directory: $GOOD_TREE" 1>&2
+if [[ ! -d $GOOD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: good template tree answers sub-directory not a directory: $GOOD_TEMPLATE_ANSWERS" 1>&2
+    exit 14
+fi
+if [[ ! -r $GOOD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: good template tree answers sub-directory not readable directory: $GOOD_TEMPLATE_ANSWERS" 1>&2
+    exit 14
+fi
+
+# check that the bad template tree is a readable directory
+#
+if [[ ! -e $BAD_TEMPLATE ]]; then
+    echo "$0: ERROR: bad template tree not found: $BAD_TEMPLATE" 1>&2
+    exit 15
+fi
+if [[ ! -d $BAD_TEMPLATE ]]; then
+    echo "$0: ERROR: bad template tree not a directory: $BAD_TEMPLATE" 1>&2
+    exit 15
+fi
+if [[ ! -r $BAD_TEMPLATE ]]; then
+    echo "$0: ERROR: bad template tree not readable directory: $BAD_TEMPLATE" 1>&2
     exit 15
 fi
 
-# verify good slot tree topdir sub-directory is writable
+# verify bad template tree topdir sub-directory is readable
 #
-export GOOD_TOPDIR="$GOOD_TREE/topdir"
-if [[ ! -e $GOOD_TOPDIR ]]; then
-    echo "$0: ERROR: good slot tree topdir sub-directory directory not found: $GOOD_TOPDIR" 1>&2
+export BAD_TEMPLATE_TOPDIR="$BAD_TEMPLATE/topdir"
+if [[ ! -e $BAD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: bad template tree topdir sub-directory directory not found: $BAD_TEMPLATE_TOPDIR" 1>&2
     exit 16
 fi
-if [[ ! -d $GOOD_TOPDIR ]]; then
-    echo "$0: ERROR: good slot tree topdir sub-directory not a directory: $GOOD_TOPDIR" 1>&2
-    exit 17
+if [[ ! -d $BAD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: bad template tree topdir sub-directory not a directory: $BAD_TEMPLATE_TOPDIR" 1>&2
+    exit 16
 fi
-if [[ ! -w $GOOD_TOPDIR ]]; then
-    echo "$0: ERROR: good slot tree topdir sub-directory not writable directory: $GOOD_TOPDIR" 1>&2
-    exit 18
+if [[ ! -r $BAD_TEMPLATE_TOPDIR ]]; then
+    echo "$0: ERROR: bad template tree topdir sub-directory not readable directory: $BAD_TEMPLATE_TOPDIR" 1>&2
+    exit 16
 fi
 
-# verify good slot tree answers sub-directory is writable
+# verify bad template tree answers sub-directory is readable
 #
+export BAD_TEMPLATE_ANSWERS="$BAD_TEMPLATE/answers"
+if [[ ! -e $BAD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: bad template tree answers sub-directory directory not found: $BAD_TEMPLATE_ANSWERS" 1>&2
+    exit 17
+fi
+if [[ ! -d $BAD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: bad template tree answers sub-directory not a directory: $BAD_TEMPLATE_ANSWERS" 1>&2
+    exit 17
+fi
+if [[ ! -r $BAD_TEMPLATE_ANSWERS ]]; then
+    echo "$0: ERROR: bad template tree answers sub-directory not readable directory: $BAD_TEMPLATE_ANSWERS" 1>&2
+    exit 17
+fi
+
+# form good tree sub-directory paths
+#
+export GOOD_TOPDIR="$GOOD_TREE/topdir"
 export GOOD_ANSWERS="$GOOD_TREE/answers"
-if [[ ! -e $GOOD_ANSWERS ]]; then
-    echo "$0: ERROR: good slot tree answers sub-directory directory not found: $GOOD_ANSWERS" 1>&2
-    exit 19
-fi
-if [[ ! -d $GOOD_ANSWERS ]]; then
-    echo "$0: ERROR: good slot tree answers sub-directory not a directory: $GOOD_ANSWERS" 1>&2
-    exit 20
-fi
-if [[ ! -w $GOOD_ANSWERS ]]; then
-    echo "$0: ERROR: good slot tree answers sub-directory not writable directory: $GOOD_ANSWERS" 1>&2
-    exit 21
-fi
 export GOOD_BUILD_OUT="$GOOD_TREE/build.out"
 export GOOD_WORKDIR="$GOOD_TREE/workdir"
 
-# check that the bad slot tree is a writable directory
-#
-if [[ ! -e $BAD_TREE ]]; then
-    echo "$0: ERROR: bad slot tree not found: $BAD_TREE" 1>&2
-    exit 22
-fi
-if [[ ! -d $BAD_TREE ]]; then
-    echo "$0: ERROR: bad slot tree not a directory: $BAD_TREE" 1>&2
-    exit 23
-fi
-if [[ ! -w $BAD_TREE ]]; then
-    echo "$0: ERROR: bad slot tree not writable directory: $BAD_TREE" 1>&2
-    exit 24
-fi
-
-# verify bad slot tree topdir sub-directory is writable
+# form bad tree sub-directory paths
 #
 export BAD_TOPDIR="$BAD_TREE/topdir"
-if [[ ! -e $BAD_TOPDIR ]]; then
-    echo "$0: ERROR: bad slot tree topdir sub-directory directory not found: $BAD_TOPDIR" 1>&2
-    exit 25
-fi
-if [[ ! -d $BAD_TOPDIR ]]; then
-    echo "$0: ERROR: bad slot tree topdir sub-directory not a directory: $BAD_TOPDIR" 1>&2
-    exit 26
-fi
-if [[ ! -w $BAD_TOPDIR ]]; then
-    echo "$0: ERROR: bad slot tree topdir sub-directory not writable directory: $BAD_TOPDIR" 1>&2
-    exit 27
-fi
-
-# verify bad slot tree answers sub-directory is writable
-#
 export BAD_ANSWERS="$BAD_TREE/answers"
-if [[ ! -e $BAD_ANSWERS ]]; then
-    echo "$0: ERROR: bad slot tree answers sub-directory directory not found: $BAD_ANSWERS" 1>&2
-    exit 28
-fi
-if [[ ! -d $BAD_ANSWERS ]]; then
-    echo "$0: ERROR: bad slot tree answers sub-directory not a directory: $BAD_ANSWERS" 1>&2
-    exit 29
-fi
-if [[ ! -w $BAD_ANSWERS ]]; then
-    echo "$0: ERROR: bad slot tree answers sub-directory not writable directory: $BAD_ANSWERS" 1>&2
-    exit 30
-fi
 export BAD_BUILD_OUT="$BAD_TREE/build.out"
 export BAD_WORKDIR="$BAD_TREE/workdir"
 
@@ -311,31 +378,27 @@ export RE_SLOT_NUM='[0-9]'			    # IOCCC slot number is 1 digit
 #
 export RE_UUID_SLOT_NUM="$RE_UUID-$RE_SLOT_NUM"	    # IOCCC UUID-SLOT_NUM
 
-# form temporary exit code file
-#
-TMP_EXIT_CODE=$(mktemp -u .exit_code.XXXXXXXXXX)
-export TMP_EXIT_CODE
-trap 'rm -f $TMP_EXIT_CODE; exit' 0 1 2 3 15
-rm -f "$TMP_EXIT_CODE"
-echo "0" > "$TMP_EXIT_CODE"
-if [[ ! -s "$TMP_EXIT_CODE" ]]; then
-    echo "$0: ERROR: could not create exit code file: $TMP_EXIT_CODE" 1>&2
-    exit 31
-fi
-if [[ ! -w "$TMP_EXIT_CODE" ]]; then
-    echo "$0: ERROR: exit code file not writable: $TMP_EXIT_CODE" 1>&2
-    exit 32
-fi
-
 # debugging
 #
 if [[ $V_FLAG -ge 3 ]]; then
-    echo "$0: debug[3]: MKIOCCCENTRY_SLOTS_VERSION=$MKIOCCCENTRY_SLOTS_VERSION" 1>&2
-    echo "$0: debug[3]: MKIOCCCENTRY=$MKIOCCCENTRY" 1>&2
+    echo "$0: debug[3]: NAME=$NAME" 1>&2
+    echo "$0: debug[3]: V_FLAG=$V_FLAG" 1>&2
+    echo "$0: debug[3]: DO_NOT_PROCESS=$DO_NOT_PROCESS" 1>&2
+    echo "$0: debug[3]: VERSION=$VERSION" 1>&2
     echo "$0: debug[3]: GOOD_TREE=$GOOD_TREE" 1>&2
+    echo "$0: debug[3]: GOOD_TEMPLATE=$GOOD_TEMPLATE" 1>&2
     echo "$0: debug[3]: BAD_TREE=$BAD_TREE" 1>&2
-    echo "$0: debug[3]: EXIT_CODE=$EXIT_CODE" 1>&2
+    echo "$0: debug[3]: BAD_TEMPLATE=$BAD_TEMPLATE" 1>&2
+    echo "$0: debug[3]: MKIOCCCENTRY=$MKIOCCCENTRY" 1>&2
     echo "$0: debug[3]: REPO_TOPDIR=$REPO_TOPDIR" 1>&2
+    echo "$0: debug[3]: RSYNC_BIN=$RSYNC_BIN" 1>&2
+    echo "$0: debug[3]: UUID=$UUID" 1>&2
+    echo "$0: debug[3]: RSYNC_BIN=$RSYNC_BIN" 1>&2
+    echo "$0: debug[3]: EXIT_CODE=$EXIT_CODE" 1>&2
+    echo "$0: debug[3]: GOOD_TEMPLATE_TOPDIR=$GOOD_TEMPLATE_TOPDIR" 1>&2
+    echo "$0: debug[3]: GOOD_TEMPLATE_ANSWERS=$GOOD_TEMPLATE_ANSWERS" 1>&2
+    echo "$0: debug[3]: BAD_TEMPLATE_TOPDIR=$BAD_TEMPLATE_TOPDIR" 1>&2
+    echo "$0: debug[3]: BAD_TEMPLATE_ANSWERS=$BAD_TEMPLATE_ANSWERS" 1>&2
     echo "$0: debug[3]: GOOD_TOPDIR=$GOOD_TOPDIR" 1>&2
     echo "$0: debug[3]: GOOD_ANSWERS=$GOOD_ANSWERS" 1>&2
     echo "$0: debug[3]: GOOD_BUILD_OUT=$GOOD_BUILD_OUT" 1>&2
@@ -347,7 +410,323 @@ if [[ $V_FLAG -ge 3 ]]; then
     echo "$0: debug[3]: RE_UUID=$RE_UUID" 1>&2
     echo "$0: debug[3]: RE_SLOT_NUM=$RE_SLOT_NUM" 1>&2
     echo "$0: debug[3]: RE_UUID_SLOT_NUM=$RE_UUID_SLOT_NUM" 1>&2
-    echo "$0: debug[3]: TMP_EXIT_CODE=$TMP_EXIT_CODE" 1>&2
+fi
+
+# verify that the UUID matches the RE_UUID regex
+#
+if [[ ! $UUID =~ $RE_UUID ]]; then
+    echo "$0: ERROR: invalid UUID: $UUID" 1>&2
+    if [[ $V_FLAG -ge 3 ]]; then
+	echo "$0: ERROR: does not match regex: $RE_UUID" 1>&2
+    fi
+    exit 5
+fi
+
+# -N stops early before any processing is performed
+#
+if [[ -n $DO_NOT_PROCESS ]]; then
+    if [[ $V_FLAG -ge 3 ]]; then
+	echo "$0: debug[3]: arguments parsed, -N given, exiting 0" 1>&2
+    fi
+    exit 0
+fi
+
+# form good tree from good template
+#
+if [[ -e $GOOD_TREE ]]; then
+
+    # remove old good tree
+    #
+    if [[ $V_FLAG -ge 1 ]]; then
+	echo "$0: debug[1]: about to: rm -rf $GOOD_TREE" 1>&2
+    fi
+    rm -rf "$GOOD_TREE"
+    status="$?"
+    if [[ $status -ne 0 ]]; then
+	echo "$0: ERROR: rm -rf $GOOD_TREE failed, exit code: $status" 1>&2
+	exit 18
+    elif [[ -e $GOOD_TREE ]]; then
+	echo "$0: ERROR: unable to remove the old: $GOOD_TREE" 1>&2
+	exit 18
+    fi
+fi
+
+# create new good tree and critical sub-directories
+#
+if [[ $V_FLAG -ge 1 ]]; then
+    echo "$0: debug[1]: about to: mkdir -p $GOOD_TREE $GOOD_TOPDIR $GOOD_ANSWERS" 1>&2
+fi
+mkdir -p "$GOOD_TREE" "$GOOD_TOPDIR" "$GOOD_ANSWERS"
+status="$?"
+if [[ $status -ne 0 ]]; then
+    echo "$0: ERROR: mkdir -p $GOOD_TREE $GOOD_TOPDIR $GOOD_ANSWERS failed, exit code: $status" 1>&2
+    exit 19
+fi
+
+# check that the good slot tree is a writable directory
+#
+if [[ ! -e $GOOD_TREE ]]; then
+    echo "$0: ERROR: good slot tree not found: $GOOD_TREE" 1>&2
+    exit 20
+fi
+if [[ ! -d $GOOD_TREE ]]; then
+    echo "$0: ERROR: good slot tree not a directory: $GOOD_TREE" 1>&2
+    exit 20
+fi
+if [[ ! -w $GOOD_TREE ]]; then
+    echo "$0: ERROR: good slot tree not writable directory: $GOOD_TREE" 1>&2
+    exit 20
+fi
+
+# verify good slot tree topdir sub-directory is writable
+#
+if [[ ! -e $GOOD_TOPDIR ]]; then
+    echo "$0: ERROR: good slot tree topdir sub-directory directory not found: $GOOD_TOPDIR" 1>&2
+    exit 21
+fi
+if [[ ! -d $GOOD_TOPDIR ]]; then
+    echo "$0: ERROR: good slot tree topdir sub-directory not a directory: $GOOD_TOPDIR" 1>&2
+    exit 21
+fi
+if [[ ! -w $GOOD_TOPDIR ]]; then
+    echo "$0: ERROR: good slot tree topdir sub-directory not writable directory: $GOOD_TOPDIR" 1>&2
+    exit 21
+fi
+
+# verify good slot tree answers sub-directory is writable
+#
+if [[ ! -e $GOOD_ANSWERS ]]; then
+    echo "$0: ERROR: good slot tree answers sub-directory directory not found: $GOOD_ANSWERS" 1>&2
+    exit 22
+fi
+if [[ ! -d $GOOD_ANSWERS ]]; then
+    echo "$0: ERROR: good slot tree answers sub-directory not a directory: $GOOD_ANSWERS" 1>&2
+    exit 22
+fi
+if [[ ! -w $GOOD_ANSWERS ]]; then
+    echo "$0: ERROR: good slot tree answers sub-directory not writable directory: $GOOD_ANSWERS" 1>&2
+    exit 22
+fi
+
+# form good slot tree topdir content
+#
+find "$GOOD_TEMPLATE_TOPDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
+    while read -r UUID_SLOT_PATH; do
+
+	# form target directory path
+	#
+	UUID_SLOT_BASENAME=$(basename "$UUID_SLOT_PATH" | sed -e "s;UUID-;$UUID-;g")
+
+	# create target directory
+	#
+	if [[ $V_FLAG -ge 5 ]]; then
+	    echo "$0: debug[5]: about to: mkdir -p $GOOD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	fi
+	mkdir -p "$GOOD_TOPDIR/$UUID_SLOT_BASENAME"
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: mkdir -p $GOOD_TOPDIR/$UUID_SLOT_BASENAME failed, exit code: $status" 1>&2
+	    exit 23
+	elif [[ ! -d $GOOD_TOPDIR/$UUID_SLOT_BASENAME ]]; then
+	    echo "$0: ERROR: unable to create: $GOOD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	    exit 23
+	fi
+
+	# sync source and target directories for topdir
+	#
+	if [[ $V_FLAG -ge 3 ]]; then
+	    echo "$0: debug[3]: about to: $RSYNC_BIN -aS0 --delete $UUID_SLOT_PATH/ $GOOD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	fi
+	"$RSYNC_BIN" -aS0 --delete "$UUID_SLOT_PATH/" "$GOOD_TOPDIR/$UUID_SLOT_BASENAME" 2>/dev/null
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: $RSYNC_BIN -aS0 --delete $UUID_SLOT_PATH/ $GOOD_TOPDIR/$UUID_SLOT_BASENAME failed," \
+		 "exit code: $status" 1>&2
+	    exit 24
+	fi
+    done
+
+# form good slot tree answers content
+#
+find "$GOOD_TEMPLATE_ANSWERS" -mindepth 1 -maxdepth 1 -type f 2>/dev/null |
+    while read -r GOOD_ANSWER; do
+
+	# form target answer path
+	#
+	ANSWER_BASENAME=$(basename "$GOOD_ANSWER" | sed -e "s;UUID-;$UUID-;g")
+
+	# create the target answer
+	#
+	if [[ $V_FLAG -ge 3 ]]; then
+	    echo "$0: debug[3]: about to form: $GOOD_ANSWERS/$ANSWER_BASENAME" 1>&2
+	fi
+	sed -e "s;%%UUID%%;$UUID;g" "$GOOD_ANSWER" > "$GOOD_ANSWERS/$ANSWER_BASENAME"
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: sed -e s;%%UUID%%;$UUID;g $GOOD_ANSWER > $GOOD_ANSWERS/$ANSWER_BASENAME failed,"
+		 "exit code: $status" 1>&2
+	    exit 25
+	elif [[ ! -f $GOOD_ANSWERS/$ANSWER_BASENAME ]]; then
+	    echo "$0: ERROR: unable to create: $GOOD_ANSWERS/$ANSWER_BASENAME" 1>&2
+	    exit 25
+	fi
+    done
+
+# form bad tree from bad template
+#
+if [[ -e $BAD_TREE ]]; then
+
+    # remove old bad tree
+    #
+    if [[ $V_FLAG -ge 1 ]]; then
+	echo "$0: debug[1]: about to: rm -rf $BAD_TREE" 1>&2
+    fi
+    rm -rf "$BAD_TREE"
+    status="$?"
+    if [[ $status -ne 0 ]]; then
+	echo "$0: ERROR: rm -rf $BAD_TREE failed, exit code: $status" 1>&2
+	exit 26
+    elif [[ -e $BAD_TREE ]]; then
+	echo "$0: ERROR: unable to remove the old: $BAD_TREE" 1>&2
+	exit 26
+    fi
+fi
+
+# create new bad tree and critical sub-directories
+#
+if [[ $V_FLAG -ge 1 ]]; then
+    echo "$0: debug[1]: about to: mkdir -p $BAD_TREE $BAD_TOPDIR $BAD_ANSWERS" 1>&2
+fi
+mkdir -p "$BAD_TREE" "$BAD_TOPDIR" "$BAD_ANSWERS"
+status="$?"
+if [[ $status -ne 0 ]]; then
+    echo "$0: ERROR: mkdir -p $BAD_TREE $BAD_TOPDIR $BAD_ANSWERS failed, exit code: $status" 1>&2
+    exit 27
+fi
+
+# check that the bad slot tree is a writable directory
+#
+if [[ ! -e $BAD_TREE ]]; then
+    echo "$0: ERROR: bad slot tree not found: $BAD_TREE" 1>&2
+    exit 28
+fi
+if [[ ! -d $BAD_TREE ]]; then
+    echo "$0: ERROR: bad slot tree not a directory: $BAD_TREE" 1>&2
+    exit 28
+fi
+if [[ ! -w $BAD_TREE ]]; then
+    echo "$0: ERROR: bad slot tree not writable directory: $BAD_TREE" 1>&2
+    exit 28
+fi
+
+# verify bad slot tree topdir sub-directory is writable
+#
+if [[ ! -e $BAD_TOPDIR ]]; then
+    echo "$0: ERROR: bad slot tree topdir sub-directory directory not found: $BAD_TOPDIR" 1>&2
+    exit 29
+fi
+if [[ ! -d $BAD_TOPDIR ]]; then
+    echo "$0: ERROR: bad slot tree topdir sub-directory not a directory: $BAD_TOPDIR" 1>&2
+    exit 29
+fi
+if [[ ! -w $BAD_TOPDIR ]]; then
+    echo "$0: ERROR: bad slot tree topdir sub-directory not writable directory: $BAD_TOPDIR" 1>&2
+    exit 29
+fi
+
+# verify bad slot tree answers sub-directory is writable
+#
+if [[ ! -e $BAD_ANSWERS ]]; then
+    echo "$0: ERROR: bad slot tree answers sub-directory directory not found: $BAD_ANSWERS" 1>&2
+    exit 30
+fi
+if [[ ! -d $BAD_ANSWERS ]]; then
+    echo "$0: ERROR: bad slot tree answers sub-directory not a directory: $BAD_ANSWERS" 1>&2
+    exit 30
+fi
+if [[ ! -w $BAD_ANSWERS ]]; then
+    echo "$0: ERROR: bad slot tree answers sub-directory not writable directory: $BAD_ANSWERS" 1>&2
+    exit 30
+fi
+
+# form bad slot tree topdir content
+#
+find "$BAD_TEMPLATE_TOPDIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
+    while read -r UUID_SLOT_PATH; do
+
+	# form target directory path
+	#
+	UUID_SLOT_BASENAME=$(basename "$UUID_SLOT_PATH" | sed -e "s;UUID-;$UUID-;g")
+
+	# create target directory
+	#
+	if [[ $V_FLAG -ge 5 ]]; then
+	    echo "$0: debug[5]: about to: mkdir -p $BAD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	fi
+	mkdir -p "$BAD_TOPDIR/$UUID_SLOT_BASENAME"
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: mkdir -p $BAD_TOPDIR/$UUID_SLOT_BASENAME failed, exit code: $status" 1>&2
+	    exit 31
+	elif [[ ! -d $BAD_TOPDIR/$UUID_SLOT_BASENAME ]]; then
+	    echo "$0: ERROR: unable to create: $BAD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	    exit 31
+	fi
+
+	# sync source and target directories for topdir
+	#
+	if [[ $V_FLAG -ge 3 ]]; then
+	    echo "$0: debug[3]: about to: $RSYNC_BIN -aS0 --delete $UUID_SLOT_PATH/ $BAD_TOPDIR/$UUID_SLOT_BASENAME" 1>&2
+	fi
+	"$RSYNC_BIN" -aS0 --delete "$UUID_SLOT_PATH/" "$BAD_TOPDIR/$UUID_SLOT_BASENAME" 2>/dev/null
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: $RSYNC_BIN -aS0 --delete $UUID_SLOT_PATH/ $BAD_TOPDIR/$UUID_SLOT_BASENAME failed," \
+		 "exit code: $status" 1>&2
+	    exit 32
+	fi
+    done
+
+# form bad slot tree answers content
+#
+find "$BAD_TEMPLATE_ANSWERS" -mindepth 1 -maxdepth 1 -type f 2>/dev/null |
+    while read -r BAD_ANSWER; do
+
+	# form target answer path
+	#
+	ANSWER_BASENAME=$(basename "$BAD_ANSWER" | sed -e "s;UUID-;$UUID-;g")
+
+	# create the target answer
+	#
+	if [[ $V_FLAG -ge 3 ]]; then
+	    echo "$0: debug[3]: about to form: $BAD_ANSWERS/$ANSWER_BASENAME" 1>&2
+	fi
+	sed -e "s;%%UUID%%;$UUID;g" "$BAD_ANSWER" > "$BAD_ANSWERS/$ANSWER_BASENAME"
+	status="$?"
+	if [[ $status -ne 0 ]]; then
+	    echo "$0: ERROR: sed -e s;%%UUID%%;$UUID;g $BAD_ANSWER > $BAD_ANSWERS/$ANSWER_BASENAME failed,"
+		 "exit code: $status" 1>&2
+	    exit 33
+	elif [[ ! -f $BAD_ANSWERS/$ANSWER_BASENAME ]]; then
+	    echo "$0: ERROR: unable to create: $BAD_ANSWERS/$ANSWER_BASENAME" 1>&2
+	    exit 33
+	fi
+    done
+
+# form temporary exit code file
+#
+TMP_EXIT_CODE=$(mktemp -u .exit_code.XXXXXXXXXX)
+export TMP_EXIT_CODE
+trap 'rm -f $TMP_EXIT_CODE; exit' 0 1 2 3 15
+rm -f "$TMP_EXIT_CODE"
+echo "0" > "$TMP_EXIT_CODE"
+if [[ ! -s "$TMP_EXIT_CODE" ]]; then
+    echo "$0: ERROR: could not create exit code file: $TMP_EXIT_CODE" 1>&2
+    exit 34
+fi
+if [[ ! -w "$TMP_EXIT_CODE" ]]; then
+    echo "$0: ERROR: exit code file not writable: $TMP_EXIT_CODE" 1>&2
+    exit 34
 fi
 
 # form an empty build.out sub-directory of good slot tree
@@ -359,13 +738,13 @@ rm -rf "$GOOD_BUILD_OUT"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: rm -rf $GOOD_BUILD_OUT failed, exit code: $status" 1>&2
-    exit 33
+    exit 35
 fi
 mkdir -p -- "$GOOD_BUILD_OUT"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: mkdir -p -- $GOOD_BUILD_OUT failed, exit code: $status" 1>&2
-    exit 34
+    exit 35
 fi
 
 # form an empty workdir sub-directory of good slot tree
@@ -377,7 +756,7 @@ rm -rf "$GOOD_WORKDIR"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: rm -rf $GOOD_WORKDIR failed, exit code: $status" 1>&2
-    exit 35
+    exit 36
 fi
 mkdir -p -- "$GOOD_WORKDIR"
 status="$?"
@@ -401,7 +780,7 @@ mkdir -p -- "$BAD_BUILD_OUT"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: mkdir -p -- $BAD_BUILD_OUT failed, exit code: $status" 1>&2
-    exit 38
+    exit 37
 fi
 
 # form an empty workdir sub-directory of bad slot tree
@@ -413,13 +792,13 @@ rm -rf "$BAD_WORKDIR"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: rm -rf $BAD_WORKDIR failed, exit code: $status" 1>&2
-    exit 39
+    exit 38
 fi
 mkdir -p -- "$BAD_WORKDIR"
 status="$?"
 if [[ $status -ne 0 ]]; then
     echo "$0: ERROR: mkdir -p -- $BAD_WORKDIR failed, exit code: $status" 1>&2
-    exit 40
+    exit 38
 fi
 
 # process all good slots
@@ -431,7 +810,7 @@ fi
 #
 # Then we use mkiocccentry to generate a:
 #
-#   submission: $GOOD_WORKDIR/UUID-SLOT_NUM/12345678-1234-4321-abcd-1234567890ab-0/
+#   submission: $GOOD_WORKDIR/UUID-SLOT_NUM/UUID-SLOT_NUM/
 #
 # The submission is a directory that contains both:
 #
@@ -571,7 +950,7 @@ find "$GOOD_ANSWERS" -type f -name '[0-9a-f]*-[0-9a-f]' -print |
 #
 # Then we use mkiocccentry to generate a:
 #
-#   submission: $BAD_WORKDIR/UUID-SLOT_NUM/12345678-1234-4321-abcd-1234567890ab-0/
+#   submission: $BAD_WORKDIR/UUID-SLOT_NUM/UUID-SLOT_NUM/
 #
 # The submission is a directory that contains both:
 #
@@ -589,6 +968,9 @@ find "$GOOD_ANSWERS" -type f -name '[0-9a-f]*-[0-9a-f]' -print |
 # This code will attempt to process ALL UUID-SLOT_NUM's.
 # All UUID-SLOT_NUM's are successful, the EXIT_CODE will be set to 0.
 # If any UUID-SLOT_NUM fails, the EXIT_CODE will be set to non-zero.
+#
+# NOTE: Not all SLOT_NUM values are used for the bad slots.
+#	This is because slot 0, 1, and 2 are reserved for other error testing.
 #
 find "$BAD_ANSWERS" -type f -name '[0-9a-f]*-[0-9a-f]' -print |
     sed -e 's;^.*/;;' |

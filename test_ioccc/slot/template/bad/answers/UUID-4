@@ -1,5 +1,5 @@
 MKIOCCCENTRY_ANSWERS_IOCCC-1.0
-12345678-1234-4321-abcd-1234567890ab
+%%UUID%%
 4
 title.4
 abstract for slot 4
@@ -22,6 +22,6 @@ user3@example.sb
 @user3@example.sb
 
 
-y
+n
 anon3
 ANSWERS_EOF

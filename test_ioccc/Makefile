@@ -247,7 +247,7 @@ LESS_PICKY_OPTIONS= -8 -c -e -s -t8 -u -v -w
 # all shell scripts
 #
 SH_FILES= chksubmit_test.sh ioccc_test.sh iocccsize_test.sh mkiocccentry_test.sh txzchk_test.sh \
-	prep.sh hostchk.sh gen_test_JSON.sh mkiocccentry_slots.sh
+	prep.sh hostchk.sh gen_test_JSON.sh mkiocccentry_slots.sh gen_submit.sh
 #
 SH_PICKY_OPTIONS= -8 -c -e -s -t8 -u -v -w
 
@@ -773,6 +773,8 @@ clobber: legacy_clobber clean
 	${E} ${RM} ${RM_V} -rf slot/good/build.out slot/bad/build.out
 	${E} ${RM} ${RM_V} -f test_file_util.copy.c test_file_util.copy.o test_file_util
 	${E} ${RM} ${RM_V} -rf aa bb
+	${E} ${RM} ${RM_V} -rf slot/good
+	${E} ${RM} ${RM_V} -rf slot/bad
 	${S} echo
 	${S} echo "${OUR_NAME}: make $@ ending"
 

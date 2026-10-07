@@ -1,0 +1,17 @@
+MKIOCCCENTRY_ANSWERS_IOCCC-1.0
+%%UUID%%
+0
+title.0
+abstract for slot 0
+1
+first0 middle0 last0
+AU
+user0@example.au
+http://host0.example.au/index.html
+https://alt0.example.au/index.html
+@user0@example.au
+@user0
+affiliation for user 0
+y
+first0_middle0_last0
+ANSWERS_EOF
