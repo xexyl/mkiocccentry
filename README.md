@@ -5,7 +5,9 @@
 
 The `mkiocccentry` toolkit is required to form a submission to enter the [IOCCC
 &lpar;International Obfuscated C Code Contest&rpar;](https://www.ioccc.org).
-If you do not know what that is then you are in the wrong place; otherwise read below.
+
+If you do not know what the **IOCCC** is, then see the [Goals of the Contest](https://www.ioccc.org/index.html#goals),
+and [Entering the IOCCC: the bare minimum you need to know](https://www.ioccc.org/faq.html#enter_questions).
 
 
 ## Requirements to use the mkiocccentry toolkit to submit to the IOCCC
@@ -22,8 +24,8 @@ First, a set of requirements for using the toolkit:
 ## Compiling and using the toolkit
 
 For a quick step by step list of instructions on how to submit an entry,
-including obtaining this repo, compiling it and using it, please see the
-FAQ on "[submitting to the IOCCC](https://www.ioccc.org/faq.html#submit)".
+including obtaining this repo, compiling it and using it, please see
+FAQ on "[Entering the IOCCC: the bare minimum you need to know](https://www.ioccc.org/quick-start.html)".
 
 You might also wish to look at the
 "[guidelines about mkiocccentry](https://www.ioccc.org/next/guidelines.html#mkiocccentry)".
