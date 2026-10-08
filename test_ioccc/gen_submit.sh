@@ -56,7 +56,7 @@ export V_FLAG=0
 #
 export DO_NOT_PROCESS=
 #
-export VERSION="2.0.0 2026-10-06"
+export VERSION="2.0.1 2026-10-07"
 export GOOD_TEMPLATE="./test_ioccc/slot/template/good"
 export BAD_TEMPLATE="./test_ioccc/slot/template/bad"
 #
@@ -196,6 +196,49 @@ export RE_SLOT_NUM='[0-9]'			    # IOCCC slot number is 1 digit
 #
 export RE_UUID_SLOT_NUM="$RE_UUID-$RE_SLOT_NUM"	    # IOCCC UUID-SLOT_NUM
 
+# change to the top level directory as needed
+#
+if [[ -n $REPO_TOPDIR ]]; then
+    if [[ ! -d $REPO_TOPDIR ]]; then
+	echo "$0: ERROR: -Z $REPO_TOPDIR given: not a directory: $REPO_TOPDIR" 1>&2
+	exit 6
+    fi
+    if [[ $V_FLAG -ge 1 ]]; then
+	echo "$0: debug[1]: -Z $REPO_TOPDIR given, about to cd $REPO_TOPDIR" 1>&2
+    fi
+    # SC2164 (warning): Use 'cd ... || exit' or 'cd ... || return' in case cd fails.
+    # https://www.shellcheck.net/wiki/SC2164
+    # shellcheck disable=SC2164
+    cd "$REPO_TOPDIR"
+    status="$?"
+    if [[ $status -ne 0 ]]; then
+	echo "$0: ERROR: -Z $REPO_TOPDIR given: cd $REPO_TOPDIR exit code: $status" 1>&2
+	exit 6
+    fi
+elif [[ -f mkiocccentry.c ]]; then
+    REPO_TOPDIR="$PWD"
+    if [[ $V_FLAG -ge 3 ]]; then
+	echo "$0: debug[3]: assume REPO_TOPDIR is .: $REPO_TOPDIR" 1>&2
+    fi
+elif [[ -f ../mkiocccentry.c ]]; then
+    cd ..
+    status="$?"
+    if [[ $status -ne 0 ]]; then
+	echo "$0: ERROR: cd .. exit code: $status" 1>&2
+	exit 6
+    fi
+    REPO_TOPDIR="$PWD"
+    if [[ $V_FLAG -ge 3 ]]; then
+	echo "$0: debug[3]: assume REPO_TOPDIR is ..: $REPO_TOPDIR" 1>&2
+    fi
+else
+    echo "$0: ERROR: cannot determine REPO_TOPDIR, use -Z topdir" 1>&2
+    exit 6
+fi
+if [[ $V_FLAG -ge 3 ]]; then
+    echo "$0: debug[3]: REPO_TOPDIR is the current directory: $REPO_TOPDIR" 1>&2
+fi
+
 # debugging
 #
 if [[ $V_FLAG -ge 3 ]]; then
@@ -240,7 +283,7 @@ fi
 # run mkiocccentry_slots.sh
 #
 if [[ $V_FLAG -ge 1 ]]; then
-    echo "$0: debug[31: about to: $MKIOCCCENTRY_SLOTS -v $V_FLAG -g $GOOD_TREE -G $GOOD_TEMPLATE -b $BAD_TREE -B $BAD_TEMPLATE" \
+    echo "$0: debug[1]: about to: $MKIOCCCENTRY_SLOTS -v $V_FLAG -g $GOOD_TREE -G $GOOD_TEMPLATE -b $BAD_TREE -B $BAD_TEMPLATE" \
 						     "-M $MKIOCCCENTRY -R $RSYNC_BIN -U $UUID -Z $REPO_TOPDIR" 1>&2
 fi
 "$MKIOCCCENTRY_SLOTS" -v "$V_FLAG" -g "$GOOD_TREE" -G "$GOOD_TEMPLATE" -b "$BAD_TREE" -B "$BAD_TEMPLATE" \
